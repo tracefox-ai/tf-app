@@ -9,6 +9,8 @@ import {
   silenceAlertByToken,
 } from '@/controllers/alerts';
 import { createTeam, isTeamExisting } from '@/controllers/team';
+import { ensureTeamMembership } from '@/controllers/teamMembership';
+import { ensureTenantClickhouseConnectionAndSources } from '@/controllers/tenantDefaults';
 import { handleAuthError, redirectToDashboard } from '@/middleware/auth';
 import TeamInvite from '@/models/teamInvite';
 import User from '@/models/user'; // TODO -> do not import model directly
@@ -19,6 +21,7 @@ import { validatePassword } from '@/utils/validators';
 
 const registrationSchema = z
   .object({
+    teamName: z.string().min(1).max(100).optional(),
     email: z.string().email(),
     password: z
       .string()
@@ -79,11 +82,7 @@ router.post(
   validateRequest({ body: registrationSchema }),
   async (req, res, next) => {
     try {
-      const { email, password } = req.body;
-
-      if (await isTeamExisting()) {
-        return res.status(409).json({ error: 'teamAlreadyExists' });
-      }
+      const { email, password, teamName } = req.body;
 
       (User as any).register(
         new User({ email }),
@@ -97,36 +96,68 @@ router.post(
             return res.status(400).json({ error: 'invalid' });
           }
 
-          const team = await createTeam({
-            name: `${email}'s Team`,
-            collectorAuthenticationEnforced: true,
-          });
-          user.team = team._id;
-          user.name = email;
-          await user.save();
-
-          // Set up default connections and sources for this new team
           try {
-            await setupTeamDefaults(team._id.toString());
+            const team = await createTeam({
+              name: (teamName?.trim() || `${email}'s Team`) as string,
+              collectorAuthenticationEnforced: true,
+            });
+            user.team = team._id;
+            user.name = email;
+            await user.save();
+
+            // Multi-tenant: make the new team active for this session.
+            req.session.activeTeamId = team._id.toString();
+
+            // SaaS: ensure membership for creator (backward-compatible; role checks can be tightened later)
+            await ensureTeamMembership({
+              userId: user._id,
+              teamId: team._id,
+              roleIfCreate: 'owner',
+            });
+
+            // SaaS: optionally provision an isolated ClickHouse database/user for this tenant and create core Sources.
+            // Controlled by CLICKHOUSE_TENANT_PROVISIONING_ENABLED.
+            try {
+              await ensureTenantClickhouseConnectionAndSources(
+                team._id.toString(),
+              );
+            } catch (error) {
+              // Don't block signup if ClickHouse admin credentials/endpoint aren't configured.
+              logger.error(
+                { err: serializeError(error), teamId: team._id.toString() },
+                'Tenant ClickHouse provisioning failed; continuing registration',
+              );
+            }
+
+            // Set up default connections and sources for this new team
+            try {
+              await setupTeamDefaults(team._id.toString());
+            } catch (error) {
+              logger.error(
+                { err: serializeError(error) },
+                'Failed to setup team defaults',
+              );
+              // Continue with registration even if setup defaults fails
+            }
+
+            return passport.authenticate('local')(req, res, () => {
+              if (req?.user?.team) {
+                return res.status(200).json({ status: 'success' });
+              }
+
+              logger.error(
+                { userId: req?.user?._id },
+                'Password login for user failed, user or team not found',
+              );
+              return res.status(400).json({ error: 'invalid' });
+            });
           } catch (error) {
             logger.error(
               { err: serializeError(error) },
-              'Failed to setup team defaults',
+              'Failed during post-registration setup',
             );
-            // Continue with registration even if setup defaults fails
+            return res.status(500).json({ error: 'invalid' });
           }
-
-          return passport.authenticate('local')(req, res, () => {
-            if (req?.user?.team) {
-              return res.status(200).json({ status: 'success' });
-            }
-
-            logger.error(
-              { userId: req?.user?._id },
-              'Password login for user failed, user or team not found',
-            );
-            return res.status(400).json({ error: 'invalid' });
-          });
         },
       );
     } catch (e) {
@@ -179,6 +210,13 @@ router.post('/team/setup/:token', async (req, res, next) => {
         }
 
         await TeamInvite.findByIdAndRemove(teamInvite._id);
+
+        // SaaS: create membership for invited user
+        await ensureTeamMembership({
+          userId: user._id,
+          teamId: teamInvite.teamId,
+          roleIfCreate: 'member',
+        });
 
         req.login(user, err => {
           if (err) {

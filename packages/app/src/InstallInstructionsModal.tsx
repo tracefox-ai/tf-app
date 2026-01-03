@@ -1,9 +1,11 @@
+import { useMemo, useState } from 'react';
 import cx from 'classnames';
-import { Button, Group, Modal } from '@mantine/core';
+import { Button, Group, Modal, Table } from '@mantine/core';
 import { IconClipboard, IconClipboardCheck } from '@tabler/icons-react';
 
 import api from './api';
 import Clipboard from './Clipboard';
+import { HDX_COLLECTOR_URL } from './config';
 
 function CopyableValue({
   label = '',
@@ -53,6 +55,17 @@ export default function InstallInstructionModal({
   onHide: () => void;
 }) {
   const { data: team, isLoading, refetch: refetchTeam } = api.useTeam();
+  const { data: ingestionTokens, refetch: refetchTokens } =
+    api.useIngestionTokens();
+  const createToken = api.useCreateIngestionToken();
+  const rotateToken = api.useRotateIngestionToken();
+  const revokeToken = api.useRevokeIngestionToken();
+
+  const [lastCreatedToken, setLastCreatedToken] = useState<string | null>(null);
+
+  const activeTokens = useMemo(() => {
+    return ingestionTokens?.data?.filter(t => t.status === 'active') ?? [];
+  }, [ingestionTokens]);
 
   return (
     <Modal
@@ -63,18 +76,101 @@ export default function InstallInstructionModal({
       centered
     >
       <div className="inter">
-        {team != null && (
-          <div className="mb-4">
+        <div className="mb-3">
+          <CopyableValue
+            label={<span className="text-muted me-2">OTLP Endpoint: </span>}
+            value={HDX_COLLECTOR_URL}
+          />
+        </div>
+
+        {lastCreatedToken && (
+          <div className="mb-3">
             <CopyableValue
               label={
                 <span className="text-muted me-2">
-                  Your Ingestion API Key:{' '}
+                  Ingestion Token (copy now):{' '}
                 </span>
               }
-              value={team.apiKey}
+              value={lastCreatedToken}
             />
           </div>
         )}
+
+        <div className="mb-3 d-flex gap-2">
+          <Button
+            variant="light"
+            onClick={async () => {
+              const res = await createToken.mutateAsync({});
+              setLastCreatedToken(res.token);
+              await refetchTokens();
+            }}
+            loading={createToken.isPending}
+          >
+            Create ingestion token
+          </Button>
+          <Button
+            variant="default"
+            onClick={async () => {
+              setLastCreatedToken(null);
+              await refetchTokens();
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+
+        {activeTokens.length > 0 && (
+          <div className="mb-4">
+            <div className="fs-6 mb-2">Active ingestion tokens</div>
+            <Table striped highlightOnHover withTableBorder>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Prefix</Table.Th>
+                  <Table.Th>Shard</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {activeTokens.map(t => (
+                  <Table.Tr key={t.id}>
+                    <Table.Td>
+                      <code>{t.tokenPrefix}</code>
+                    </Table.Td>
+                    <Table.Td>{t.assignedShard ?? '-'}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={async () => {
+                            const res = await rotateToken.mutateAsync(t.id);
+                            setLastCreatedToken(res.token);
+                            await refetchTokens();
+                          }}
+                          loading={rotateToken.isPending}
+                        >
+                          Rotate
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="default"
+                          onClick={async () => {
+                            await revokeToken.mutateAsync(t.id);
+                            await refetchTokens();
+                          }}
+                          loading={revokeToken.isPending}
+                        >
+                          Revoke
+                        </Button>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </div>
+        )}
+
         <div className="fs-7 mb-4">
           Click on a link below to view installation instructions for your
           application.

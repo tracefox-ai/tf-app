@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 
 import * as config from '@/config';
-import { getAllTeams } from '@/controllers/team';
-import type { ITeam } from '@/models/team';
+import Connection from '@/models/connection';
+import IngestionToken from '@/models/ingestionToken';
 import logger from '@/utils/logger';
 
 import { agentService } from '../services/agentService';
@@ -115,102 +115,171 @@ type CollectorConfig = {
   };
 };
 
-export const buildOtelCollectorConfig = (teams: ITeam[]): CollectorConfig => {
-  const apiKeys = teams.filter(team => team.apiKey).map(team => team.apiKey);
+function getStringAttr(
+  attrs: Array<{ key: string; value: any }> | undefined,
+  key: string,
+): string | null {
+  const attr = attrs?.find(a => a.key === key);
+  const v = attr?.value;
+  return v?.stringValue ?? null;
+}
 
-  if (config.IS_ALL_IN_ONE_IMAGE || config.IS_LOCAL_APP_MODE || config.IS_DEV) {
-    // Only allow INGESTION_API_KEY for dev or all-in-one images for security reasons
-    if (config.INGESTION_API_KEY) {
-      apiKeys.push(config.INGESTION_API_KEY);
-    }
+async function buildShardCollectorConfig(
+  shardId: string,
+): Promise<CollectorConfig> {
+  // Find teams assigned to this shard via active ingestion tokens.
+  const tokens = await IngestionToken.find({
+    status: 'active',
+    assignedShard: shardId,
+  });
+  const teamIds = Array.from(new Set(tokens.map(t => t.team.toString()))).sort();
+
+  // Simplified: 1 shard = 1 tenant. Take the first teamId if multiple exist.
+  // This eliminates the need for complex filtering and prevents data leakage.
+  const teamId = teamIds[0];
+
+  // If no teams assigned to this shard, return nop config to keep collector alive.
+  if (!teamId) {
+    return {
+      extensions: {
+        health_check: { endpoint: ':13133' },
+      },
+      receivers: {
+        nop: null,
+        'otlp/hyperdx': {
+          protocols: {
+            grpc: { endpoint: '0.0.0.0:4317', include_metadata: true },
+            http: {
+              endpoint: '0.0.0.0:4318',
+              include_metadata: true,
+              cors: { allowed_origins: ['*'], allowed_headers: ['*'] },
+            },
+          },
+        },
+      },
+      connectors: {},
+      exporters: {
+        nop: null,
+      },
+      service: {
+        extensions: ['health_check'],
+        pipelines: {
+          'logs/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+          'traces/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+          'metrics/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+        },
+      },
+    };
   }
 
-  const collectorAuthenticationEnforced =
-    teams[0]?.collectorAuthenticationEnforced;
+  // Warn if multiple teams are assigned to the same shard (shouldn't happen with 1:1 mapping).
+  if (teamIds.length > 1) {
+    logger.warn(
+      {
+        shardId,
+        teamIds,
+        selectedTeamId: teamId,
+      },
+      'Multiple teams assigned to same shard. Using first team only. Consider reassigning teams to separate shards.',
+    );
+  }
 
+  const teamUser = `tenant_${teamId}`;
+  const database = `tenant_${teamId}`;
+
+  const conn = await Connection.findOne({
+    team: teamId,
+    isManaged: true,
+  }).select('+password');
+
+  if (!conn?.password) {
+    logger.error(
+      { shardId, teamId },
+      'No managed connection found for team. Returning nop config.',
+    );
+    return {
+      extensions: {
+        health_check: { endpoint: ':13133' },
+      },
+      receivers: {
+        nop: null,
+        'otlp/hyperdx': {
+          protocols: {
+            grpc: { endpoint: '0.0.0.0:4317', include_metadata: true },
+            http: {
+              endpoint: '0.0.0.0:4318',
+              include_metadata: true,
+              cors: { allowed_origins: ['*'], allowed_headers: ['*'] },
+            },
+          },
+        },
+      },
+      connectors: {},
+      exporters: {
+        nop: null,
+      },
+      service: {
+        extensions: ['health_check'],
+        pipelines: {
+          'logs/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+          'traces/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+          'metrics/nop': {
+            receivers: ['otlp/hyperdx'],
+            processors: ['batch'],
+            exporters: ['nop'],
+          },
+        },
+      },
+    };
+  }
+
+  // Simplified config: no filtering needed since 1 shard = 1 tenant.
+  // All data received by this shard goes to the single tenant's database.
   const otelCollectorConfig: CollectorConfig = {
-    extensions: {},
+    extensions: {
+      health_check: { endpoint: ':13133' },
+    },
     receivers: {
       nop: null,
       'otlp/hyperdx': {
         protocols: {
-          grpc: {
-            endpoint: '0.0.0.0:4317',
-            include_metadata: true,
-          },
+          grpc: { endpoint: '0.0.0.0:4317', include_metadata: true },
           http: {
             endpoint: '0.0.0.0:4318',
-            cors: {
-              allowed_origins: ['*'],
-              allowed_headers: ['*'],
-            },
             include_metadata: true,
+            cors: { allowed_origins: ['*'], allowed_headers: ['*'] },
           },
         },
       },
-      prometheus: {
-        config: {
-          scrape_configs: [
-            {
-              job_name: 'otelcol',
-              scrape_interval: '30s',
-              static_configs: [
-                {
-                  targets: [
-                    '0.0.0.0:8888',
-                    '${env:CLICKHOUSE_PROMETHEUS_METRICS_ENDPOINT}',
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      },
-      fluentforward: {
-        endpoint: '0.0.0.0:24225',
-      },
     },
-    connectors: {
-      'routing/logs': {
-        default_pipelines: ['logs/out-default'],
-        error_mode: 'ignore',
-        table: [
-          {
-            context: 'log',
-            statement:
-              'route() where IsMatch(attributes["rr-web.event"], ".*")',
-            pipelines: ['logs/out-rrweb'],
-          },
-        ],
-      },
-    },
+    connectors: {},
     exporters: {
       nop: null,
-      debug: {
-        verbosity: 'detailed',
-        sampling_initial: 5,
-        sampling_thereafter: 200,
-      },
-      'clickhouse/rrweb': {
-        endpoint: '${env:CLICKHOUSE_ENDPOINT}',
-        database: '${env:HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE}',
-        username: '${env:CLICKHOUSE_USER}',
-        password: '${env:CLICKHOUSE_PASSWORD}',
-        ttl: '720h',
-        logs_table_name: 'hyperdx_sessions',
-        timeout: '5s',
-        retry_on_failure: {
-          enabled: true,
-          initial_interval: '5s',
-          max_interval: '30s',
-          max_elapsed_time: '300s',
-        },
-      },
       clickhouse: {
         endpoint: '${env:CLICKHOUSE_ENDPOINT}',
-        database: '${env:HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE}',
-        username: '${env:CLICKHOUSE_USER}',
-        password: '${env:CLICKHOUSE_PASSWORD}',
+        database,
+        username: teamUser,
+        password: conn.password,
         ttl: '720h',
         timeout: '5s',
         retry_on_failure: {
@@ -222,69 +291,29 @@ export const buildOtelCollectorConfig = (teams: ITeam[]): CollectorConfig => {
       },
     },
     service: {
-      extensions: [],
+      extensions: ['health_check'],
       pipelines: {
+        logs: {
+          receivers: ['otlp/hyperdx'],
+          processors: ['memory_limiter', 'batch'],
+          exporters: ['clickhouse'],
+        },
         traces: {
-          receivers: ['nop'],
+          receivers: ['otlp/hyperdx'],
           processors: ['memory_limiter', 'batch'],
           exporters: ['clickhouse'],
         },
         metrics: {
-          // TODO: prometheus needs to be authenticated
-          receivers: ['prometheus'],
+          receivers: ['otlp/hyperdx'],
           processors: ['memory_limiter', 'batch'],
           exporters: ['clickhouse'],
-        },
-        'logs/in': {
-          // TODO: fluentforward needs to be authenticated
-          receivers: ['fluentforward'],
-          exporters: ['routing/logs'],
-        },
-        'logs/out-default': {
-          receivers: ['routing/logs'],
-          processors: ['memory_limiter', 'transform', 'batch'],
-          exporters: ['clickhouse'],
-        },
-        'logs/out-rrweb': {
-          receivers: ['routing/logs'],
-          processors: ['memory_limiter', 'batch'],
-          exporters: ['clickhouse/rrweb'],
         },
       },
     },
   };
-  if (apiKeys && apiKeys.length > 0) {
-    // attach otlp/hyperdx receiver
-    otelCollectorConfig.service.pipelines.traces.receivers.push('otlp/hyperdx');
-    otelCollectorConfig.service.pipelines.metrics.receivers.push(
-      'otlp/hyperdx',
-    );
-    otelCollectorConfig.service.pipelines['logs/in'].receivers.push(
-      'otlp/hyperdx',
-    );
-
-    if (collectorAuthenticationEnforced) {
-      if (otelCollectorConfig.receivers['otlp/hyperdx'] == null) {
-        // should never happen
-        throw new Error('otlp/hyperdx receiver not found');
-      }
-
-      otelCollectorConfig.extensions['bearertokenauth/hyperdx'] = {
-        scheme: '',
-        tokens: apiKeys,
-      };
-      otelCollectorConfig.receivers['otlp/hyperdx'].protocols.grpc.auth = {
-        authenticator: 'bearertokenauth/hyperdx',
-      };
-      otelCollectorConfig.receivers['otlp/hyperdx'].protocols.http.auth = {
-        authenticator: 'bearertokenauth/hyperdx',
-      };
-      otelCollectorConfig.service.extensions = ['bearertokenauth/hyperdx'];
-    }
-  }
 
   return otelCollectorConfig;
-};
+}
 
 export class OpampController {
   /**
@@ -324,11 +353,34 @@ export class OpampController {
 
       // Check if we should send a remote configuration
       if (agentService.agentAcceptsRemoteConfig(agent)) {
-        const teams = await getAllTeams([
-          'apiKey',
-          'collectorAuthenticationEnforced',
-        ]);
-        const otelCollectorConfig = buildOtelCollectorConfig(teams);
+        const shardId = getStringAttr(
+          agent.agentDescription?.identifyingAttributes as any,
+          'hdx.shard_id',
+        );
+        
+        logger.info(
+          {
+            instanceUid: agent.instanceUid.toString('hex'),
+            identifyingAttributes: agent.agentDescription?.identifyingAttributes,
+            detectedShardId: shardId,
+          },
+          'Determining shard ID for agent',
+        );
+
+        if (!shardId) {
+          logger.error(
+            {
+              instanceUid: agent.instanceUid.toString('hex'),
+              identifyingAttributes: agent.agentDescription?.identifyingAttributes,
+            },
+            'hdx.shard_id attribute is missing from agent identifying attributes',
+          );
+          throw new Error('OTEL_RESOURCE_ATTRIBUTES hdx.shard_id is not set');
+        }
+
+        const finalShardId = shardId;
+
+        const otelCollectorConfig = await buildShardCollectorConfig(finalShardId);
 
         if (config.IS_DEV) {
           logger.debug(JSON.stringify(otelCollectorConfig, null, 2));

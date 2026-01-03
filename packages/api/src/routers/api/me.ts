@@ -2,6 +2,7 @@ import express from 'express';
 
 import { ANTHROPIC_API_KEY, USAGE_STATS_ENABLED } from '@/config';
 import { getTeam } from '@/controllers/team';
+import { getNonNullUserWithTeam } from '@/middleware/auth';
 import { Api404Error } from '@/utils/errors';
 
 const router = express.Router();
@@ -12,15 +13,9 @@ router.get('/', async (req, res, next) => {
       throw new Api404Error('Request without user found');
     }
 
-    const {
-      _id: id,
-      accessKey,
-      createdAt,
-      email,
-      name,
-      team: teamId,
-    } = req.user;
+    const { _id: id, accessKey, createdAt, email, name } = req.user;
 
+    const { teamId } = getNonNullUserWithTeam(req);
     const team = await getTeam(teamId);
 
     return res.json({

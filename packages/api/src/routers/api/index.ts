@@ -4,6 +4,7 @@ import dashboardRouter from './dashboards';
 import meRouter from './me';
 import rootRouter from './root';
 import teamRouter from './team';
+import teamsRouter from './teams';
 import webhooksRouter from './webhooks';
 
 export default {
@@ -13,5 +14,6 @@ export default {
   meRouter,
   rootRouter,
   teamRouter,
+  teamsRouter,
   webhooksRouter,
 };

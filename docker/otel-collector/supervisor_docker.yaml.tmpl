@@ -23,6 +23,9 @@ agent:
 {{- if getenv "CUSTOM_OTELCOL_CONFIG_FILE" }}
     - {{ getenv "CUSTOM_OTELCOL_CONFIG_FILE" }}
 {{- end }}
+  description:
+    identifying_attributes:
+      hdx.shard_id: {{ getenv "HDX_SHARD_ID" }}
   args:
 {{- if getenv "OTEL_AGENT_FEATURE_GATE_ARG" }}
     - {{ getenv "OTEL_AGENT_FEATURE_GATE_ARG" }}

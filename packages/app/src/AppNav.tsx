@@ -39,6 +39,7 @@ import {
   IconSettings,
   IconSitemap,
   IconTable,
+  IconTarget,
 } from '@tabler/icons-react';
 
 import {
@@ -56,7 +57,7 @@ const APP_VERSION =
 
 import api from './api';
 import {
-  AppNavCloudBanner,
+  // AppNavCloudBanner,
   AppNavContext,
   AppNavHelpMenu,
   AppNavLink,
@@ -838,7 +839,6 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
                           [styles.nestedLinkActive]:
                             pathname.startsWith('/clickhouse'),
                         })}
-                        data-testid="nav-link-clickhouse-dashboard"
                       >
                         ClickHouse
                       </Link>
@@ -849,7 +849,6 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
                           [styles.nestedLinkActive]:
                             pathname.startsWith('/services'),
                         })}
-                        data-testid="nav-link-services-dashboard"
                       >
                         Services
                       </Link>
@@ -861,7 +860,7 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
                             [styles.nestedLinkActive]:
                               pathname.startsWith('/kubernetes'),
                           })}
-                          data-testid="nav-link-k8s-dashboard"
+                          data-testid="k8s-dashboard-nav-link"
                         >
                           Kubernetes
                         </Link>
@@ -889,7 +888,7 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
                 className="px-3 mb-2 mt-4"
               >
                 <OnboardingChecklist onAddDataClick={openInstallInstructions} />
-                <AppNavCloudBanner />
+                {/* <AppNavCloudBanner /> */}
               </div>
             </>
           )}

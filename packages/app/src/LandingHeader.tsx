@@ -3,6 +3,7 @@ import { Anchor, Burger, Button, Container, Group } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
 import api from './api';
+import { IS_OSS } from './config';
 import Logo from './Logo';
 
 export default function LandingHeader({
@@ -75,10 +76,31 @@ export default function LandingHeader({
                   Login
                 </Anchor>
               )}
+              {!isLoggedIn && !IS_OSS && (
+                <>
+                  <Anchor
+                    href="/login"
+                    c={activeKey === '/login' ? 'green' : 'gray'}
+                    underline="never"
+                    style={{ fontWeight: activeKey === '/login' ? 600 : 400 }}
+                    size="sm"
+                  >
+                    Login
+                  </Anchor>
+                  {activeKey !== '/signup' && (
+                    <Link href="/signup">
+                      <Button variant="outline" color="green" size="sm">
+                        Sign up
+                      </Button>
+                    </Link>
+                  )}
+                </>
+              )}
               {!isLoggedIn &&
-                activeKey !== '/register' &&
+                IS_OSS &&
+                activeKey !== '/signup' &&
                 installation?.isTeamExisting === false && (
-                  <Link href="/register">
+                  <Link href="/signup">
                     <Button variant="outline" color="green" size="sm">
                       Setup Account
                     </Button>
@@ -120,10 +142,34 @@ export default function LandingHeader({
                   Login
                 </Anchor>
               )}
+              {!isLoggedIn && !IS_OSS && (
+                <>
+                  <Anchor
+                    href="/login"
+                    underline="never"
+                    style={{ fontWeight: activeKey === '/login' ? 600 : 400 }}
+                  >
+                    Login
+                  </Anchor>
+                  {activeKey !== '/signup' && (
+                    <Link href="/signup">
+                      <Button
+                        variant="outline"
+                        color="green"
+                        size="sm"
+                        fullWidth
+                      >
+                        Sign up
+                      </Button>
+                    </Link>
+                  )}
+                </>
+              )}
               {!isLoggedIn &&
-                activeKey !== '/register' &&
+                IS_OSS &&
+                activeKey !== '/signup' &&
                 installation?.isTeamExisting === false && (
-                  <Link href="/register">
+                  <Link href="/signup">
                     <Button variant="outline" color="green" size="sm" fullWidth>
                       Setup Account
                     </Button>

@@ -11,6 +11,7 @@ import { appErrorHandler } from './middleware/error';
 import routers from './routers/api';
 import clickhouseProxyRouter from './routers/api/clickhouseProxy';
 import connectionsRouter from './routers/api/connections';
+import ingestionTokensRouter from './routers/api/ingestionTokens';
 import savedSearchRouter from './routers/api/savedSearch';
 import sourcesRouter from './routers/api/sources';
 import externalRoutersV2 from './routers/external-api/v2';
@@ -90,11 +91,13 @@ app.use('/alerts', isUserAuthenticated, routers.alertsRouter);
 app.use('/dashboards', isUserAuthenticated, routers.dashboardRouter);
 app.use('/me', isUserAuthenticated, routers.meRouter);
 app.use('/team', isUserAuthenticated, routers.teamRouter);
+app.use('/teams', isUserAuthenticated, routers.teamsRouter);
 app.use('/webhooks', isUserAuthenticated, routers.webhooksRouter);
 app.use('/connections', isUserAuthenticated, connectionsRouter);
 app.use('/sources', isUserAuthenticated, sourcesRouter);
 app.use('/saved-search', isUserAuthenticated, savedSearchRouter);
 app.use('/clickhouse-proxy', isUserAuthenticated, clickhouseProxyRouter);
+app.use('/ingestion-tokens', isUserAuthenticated, ingestionTokensRouter);
 // ---------------------------------------------------------------------
 
 // TODO: Separate external API routers from internal routers

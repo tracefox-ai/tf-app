@@ -11,6 +11,8 @@ export interface IConnection {
   password: string;
   username: string;
   team: ObjectId;
+  // SaaS: internal/managed connection (not user-configured)
+  isManaged?: boolean;
 }
 
 export default mongoose.model<IConnection>(
@@ -25,6 +27,10 @@ export default mongoose.model<IConnection>(
       name: String,
       host: String,
       username: String,
+      isManaged: {
+        type: Boolean,
+        default: false,
+      },
       password: {
         type: String,
         select: false,

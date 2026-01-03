@@ -9,7 +9,6 @@ import * as config from '@/config';
 import {
   getTags,
   getTeam,
-  rotateTeamApiKey,
   setTeamName,
   updateTeamClickhouseSettings,
 } from '@/controllers/team';
@@ -38,7 +37,6 @@ router.get('/', async (req, res, next) => {
     const team = await getTeam(teamId, [
       '_id',
       'allowedAuthMethods',
-      'apiKey',
       'archive',
       'name',
       'slackAlert',
@@ -49,19 +47,6 @@ router.get('/', async (req, res, next) => {
     }
 
     res.json(team.toJSON());
-  } catch (e) {
-    next(e);
-  }
-});
-
-router.patch('/apiKey', async (req, res, next) => {
-  try {
-    const teamId = req.user?.team;
-    if (teamId == null) {
-      throw new Error(`User ${req.user?._id} not associated with a team`);
-    }
-    const team = await rotateTeamApiKey(teamId);
-    res.json({ newApiKey: team?.apiKey });
   } catch (e) {
     next(e);
   }

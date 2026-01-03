@@ -80,13 +80,13 @@ export default function AuthPage({ action }: { action: 'register' | 'login' }) {
     return currentPassword === confirmPassword;
   };
 
-  const onSubmit: SubmitHandler<FormData> = data =>
+  const onSubmit: SubmitHandler<FormData> = data => {
     registerPassword.mutate(
       {
         email: data.email,
         password: data.password,
         confirmPassword: data.confirmPassword,
-      },
+      } as any,
       {
         onSuccess: () => router.push('/search'),
         onError: async error => {
@@ -109,6 +109,7 @@ export default function AuthPage({ action }: { action: 'register' | 'login' }) {
         },
       },
     );
+  };
 
   const form = isRegister
     ? {
@@ -256,7 +257,7 @@ export default function AuthPage({ action }: { action: 'register' | 'login' }) {
               {action === 'login' && config.IS_OSS === false && (
                 <div data-test-id="register-link" className="text-center fs-8 ">
                   Don{"'"}t have an account yet?{' '}
-                  <Link href="/register">Register</Link> instead.
+                  <Link href="/signup">Sign up</Link> instead.
                 </div>
               )}
             </Stack>

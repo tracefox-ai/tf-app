@@ -23,10 +23,12 @@ import {
   IconChevronUp,
   IconHelp,
   IconLogout,
+  IconPlus,
   IconSettings,
   IconUserCog,
 } from '@tabler/icons-react';
 
+import api from '@/api';
 import InstallInstructionModal from '@/InstallInstructionsModal';
 import { useSources } from '@/source';
 
@@ -42,21 +44,6 @@ export const AppNavContext = React.createContext<{
   pathname: '/',
 });
 
-export const AppNavCloudBanner = () => {
-  return (
-    <div className="my-3 bg-muted rounded p-2 text-center">
-      <span className="fs-8">Ready to deploy on ClickHouse Cloud?</span>
-      <div className="mt-2 mb-2">
-        <Link href="https://clickhouse.com/docs/use-cases/observability/clickstack/getting-started#deploy-with-clickhouse-cloud">
-          <Button variant="light" size="xs" className="hover-color-white">
-            Get Started for Free
-          </Button>
-        </Link>
-      </div>
-    </div>
-  );
-};
-
 type AppNavUserMenuProps = {
   userName?: string;
   teamName?: string;
@@ -71,6 +58,9 @@ export const AppNavUserMenu = ({
   onClickUserPreferences,
 }: AppNavUserMenuProps) => {
   const { isCollapsed } = React.useContext(AppNavContext);
+  const { data: teamsData } = api.useTeams();
+  const switchTeam = api.useSwitchTeam();
+  const createTeam = api.useCreateTeam();
 
   const initials = userName
     .split(' ')
@@ -141,6 +131,49 @@ export const AppNavUserMenu = ({
         </Paper>
       </Menu.Target>
       <Menu.Dropdown>
+        {!IS_LOCAL_MODE && teamsData?.data?.length && (
+          <>
+            <Menu.Label fz="xs">Switch team</Menu.Label>
+            {teamsData.data.map(t => (
+              <Menu.Item
+                key={t.id}
+                onClick={async () => {
+                  await switchTeam.mutateAsync(t.id);
+                  // Simplest way to ensure all client caches and pages reset to the new tenant.
+                  window.location.reload();
+                }}
+                disabled={
+                  switchTeam.isPending ||
+                  (teamsData.activeTeamId != null &&
+                    teamsData.activeTeamId === t.id)
+                }
+                leftSection={
+                  teamsData.activeTeamId != null &&
+                  teamsData.activeTeamId === t.id ? (
+                    <Badge size="xs" color="green">
+                      Active
+                    </Badge>
+                  ) : undefined
+                }
+              >
+                {t.name}
+              </Menu.Item>
+            ))}
+            <Menu.Item
+              onClick={async () => {
+                const name = window.prompt('New team name');
+                if (!name?.trim()) return;
+                await createTeam.mutateAsync(name.trim());
+                window.location.reload();
+              }}
+              disabled={createTeam.isPending}
+              leftSection={<IconPlus size={16} />}
+            >
+              Create team…
+            </Menu.Item>
+            <Menu.Divider />
+          </>
+        )}
         {IS_LOCAL_MODE ? (
           <Menu.Label fz="xs">Local mode</Menu.Label>
         ) : (

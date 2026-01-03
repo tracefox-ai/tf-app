@@ -29,7 +29,7 @@ describe('team router', () => {
 
     expect(new Date(resp.body.createdAt).toString()).not.toBe('Invalid Date');
 
-    expect(_.omit(resp.body, ['_id', 'id', 'apiKey', 'createdAt']))
+    expect(_.omit(resp.body, ['_id', 'id', 'createdAt']))
       .toMatchInlineSnapshot(`
 Object {
   "allowedAuthMethods": Array [],
@@ -333,13 +333,5 @@ Array [
     const resp2 = await agent.get('/team/invitations').expect(200);
 
     expect(resp2.body.data).toHaveLength(0);
-  });
-
-  it('PATCH /team/apiKey', async () => {
-    const { agent } = await getLoggedInAgent(server);
-
-    const resp = await agent.patch('/team/apiKey').expect(200);
-
-    expect(resp.body.newApiKey.length).toBeGreaterThan(0);
   });
 });

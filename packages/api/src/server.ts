@@ -57,7 +57,7 @@ export default class Server {
 
     this.appServer.listen(config.PORT, () => {
       logger.info(
-        `API Server listening on port ${config.PORT}, NODE_ENV=${process.env.NODE_ENV}`,
+        `API Server listening on port ${config.PORT}, NODE_ENV=${process.env.NODE_ENV}, INGESTION_SHARD_COUNT=${config.INGESTION_SHARD_COUNT}`,
       );
     });
 

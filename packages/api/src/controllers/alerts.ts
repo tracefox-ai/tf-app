@@ -76,13 +76,23 @@ export const createAlert = async (
   userId: ObjectId,
 ) => {
   if (alertInput.source === AlertSource.TILE) {
-    if ((await Dashboard.findById(alertInput.dashboardId)) == null) {
+    if (
+      (await Dashboard.findOne({
+        _id: alertInput.dashboardId,
+        team: teamId,
+      })) == null
+    ) {
       throw new Error('Dashboard ID not found');
     }
   }
 
   if (alertInput.source === AlertSource.SAVED_SEARCH) {
-    if ((await SavedSearch.findById(alertInput.savedSearchId)) == null) {
+    if (
+      (await SavedSearch.findOne({
+        _id: alertInput.savedSearchId,
+        team: teamId,
+      })) == null
+    ) {
       throw new Error('Saved Search ID not found');
     }
   }

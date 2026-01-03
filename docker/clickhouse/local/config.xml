@@ -27,6 +27,11 @@
         <users_xml>
             <path>users.xml</path>
         </users_xml>
+        <!-- Needed for CREATE USER / GRANT in newer ClickHouse versions.
+             Stores access entities (users/roles/grants) in a writable directory. -->
+        <local_directory>
+            <path>/var/lib/clickhouse/access/</path>
+        </local_directory>
     </user_directories>
     <!-- <users_config>users.xml</users_config> -->
     <default_profile>default</default_profile>

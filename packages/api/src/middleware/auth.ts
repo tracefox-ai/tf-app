@@ -23,6 +23,7 @@ declare module 'express-session' {
   interface Session {
     messages: string[]; // Set by passport
     passport: { user: string }; // Set by passport
+    activeTeamId?: string; // SaaS multi-tenant: currently selected tenant/org
   }
 }
 
@@ -118,16 +119,21 @@ export function isUserAuthenticated(
   res.sendStatus(401);
 }
 
-export function getNonNullUserWithTeam(req: Request) {
+export function getNonNullUserWithTeam(req: Request<any, any, any, any>) {
   const user = req.user;
 
   if (!user) {
     throw new Error('User is not authenticated');
   }
 
-  if (!user.team) {
+  // Prefer explicit active team from session (multi-tenant), else fall back to user.team (legacy).
+  const rawTeamId = req.session?.activeTeamId ?? (user as any).team;
+  if (!rawTeamId) {
     throw new Error(`User ${user._id} is not associated with a team`);
   }
 
-  return { teamId: user.team, userId: user._id, email: user.email };
+  // Normalize to a string for controllers that accept string team id
+  const teamId = rawTeamId.toString();
+
+  return { teamId, userId: user._id, email: user.email };
 }

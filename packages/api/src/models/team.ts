@@ -9,7 +9,6 @@ export type ITeam = {
   id: string;
   name: string;
   allowedAuthMethods?: 'password'[];
-  apiKey: string;
   hookId: string;
   collectorAuthenticationEnforced: boolean;
 } & TeamClickHouseSettings;
@@ -22,12 +21,6 @@ export default mongoose.model<ITeam>(
       name: String,
       allowedAuthMethods: [String],
       hookId: {
-        type: String,
-        default: function genUUID() {
-          return uuidv4();
-        },
-      },
-      apiKey: {
         type: String,
         default: function genUUID() {
           return uuidv4();

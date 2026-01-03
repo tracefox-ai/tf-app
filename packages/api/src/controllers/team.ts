@@ -15,7 +15,6 @@ export const LOCAL_APP_TEAM = {
   name: 'Local App Team',
   // Placeholder keys
   hookId: uuidv4(),
-  apiKey: uuidv4(),
   collectorAuthenticationEnforced: false,
   toJSON() {
     return this;
@@ -38,10 +37,6 @@ export async function createTeam({
   name: string;
   collectorAuthenticationEnforced?: boolean;
 }) {
-  if (await isTeamExisting()) {
-    throw new Error('Team already exists');
-  }
-
   const team = new Team({ name, collectorAuthenticationEnforced });
 
   await team.save();
@@ -62,19 +57,11 @@ export function getTeam(id?: string | ObjectId, fields?: string[]) {
     return LOCAL_APP_TEAM;
   }
 
-  return Team.findOne({}, fields);
-}
-
-export function getTeamByApiKey(apiKey: string) {
-  if (config.IS_LOCAL_APP_MODE) {
-    return LOCAL_APP_TEAM;
+  if (id == null) {
+    return null;
   }
 
-  return Team.findOne({ apiKey });
-}
-
-export function rotateTeamApiKey(teamId: ObjectId) {
-  return Team.findByIdAndUpdate(teamId, { apiKey: uuidv4() }, { new: true });
+  return Team.findById(id, fields);
 }
 
 export function setTeamName(teamId: ObjectId, name: string) {

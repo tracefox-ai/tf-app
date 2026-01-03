@@ -14,7 +14,6 @@ export type NumberFormat = _NumberFormat;
 
 export type Team = {
   allowedAuthMethods: any[];
-  apiKey?: string;
   name: string;
   users: {
     email: string;

@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import Head from 'next/head';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { SubmitHandler, useForm, useWatch } from 'react-hook-form';
 import { DEFAULT_METADATA_MAX_ROWS_TO_READ } from '@hyperdx/common-utils/dist/core/metadata';
 import { TeamClickHouseSettings } from '@hyperdx/common-utils/dist/types';
@@ -25,6 +24,9 @@ import { notifications } from '@mantine/notifications';
 import {
   IconCheck,
   IconClipboard,
+  IconChevronDown,
+  IconChevronUp,
+  IconDatabase,
   IconHelpCircle,
   IconPencil,
   IconX,
@@ -370,6 +372,7 @@ function ClickhouseSettingForm({
               <SelectControlled
                 control={form.control}
                 name="value"
+                value={useWatch({ control: form.control, name: 'value' })}
                 data={[displayValue(true), displayValue(false)]}
                 size="xs"
                 placeholder="Please select"
@@ -679,7 +682,6 @@ export default function TeamPage() {
               <IntegrationsSection />
               <TeamNameSection />
               <TeamQueryConfigSection />
-              <ApiKeysSection />
 
               {hasAllowedAuthMethods && (
                 <>

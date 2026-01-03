@@ -38,7 +38,8 @@ export function loginHook(request: Request, options: any, response: Response) {
     '/forgot',
     '/join-team',
     '/login',
-    '/register',
+    // '/register',
+    '/signup',
     '/reset-password',
   ];
   if (!WHITELIST_PATHS.includes(Router.pathname) && response.status === 401) {
@@ -232,14 +233,6 @@ const api = {
         hdxServer(`chart/services`, {
           method: 'GET',
         }).json() as Promise<ServicesResponse>,
-    });
-  },
-  useRotateTeamApiKey() {
-    return useMutation<any, Error | HTTPError>({
-      mutationFn: async () =>
-        hdxServer(`team/apiKey`, {
-          method: 'PATCH',
-        }).json(),
     });
   },
   useDeleteTeamMember() {
@@ -502,18 +495,12 @@ const api = {
   },
   useRegisterPassword() {
     return useMutation({
-      mutationFn: async ({
-        email,
-        password,
-        confirmPassword,
-      }: {
-        email: string;
-        password: string;
-        confirmPassword: string;
-      }) =>
+      // @ts-ignore
+      mutationFn: async ({ email, password, confirmPassword, teamName }) =>
         hdxServer(`register/password`, {
           method: 'POST',
           json: {
+            teamName,
             email,
             password,
             confirmPassword,
@@ -540,6 +527,98 @@ const api = {
             password,
           },
         }).json() as Promise<{ success: boolean; error?: string }>,
+    });
+  },
+  useIngestionTokens() {
+    return useQuery<{
+      data: Array<{
+        id: string;
+        tokenPrefix: string;
+        status: 'active' | 'revoked';
+        description?: string;
+        assignedShard?: string;
+        createdAt: string;
+        lastUsedAt?: string;
+        revokedAt?: string;
+      }>;
+    }>({
+      queryKey: ['ingestion-tokens'],
+      queryFn: () => hdxServer('ingestion-tokens').json(),
+      retry: false,
+    });
+  },
+  useCreateIngestionToken() {
+    return useMutation({
+      mutationFn: async (params?: { description?: string }) =>
+        hdxServer('ingestion-tokens', {
+          method: 'POST',
+          json: params ?? {},
+        }).json<{
+          token: string;
+          tokenRecord: {
+            id: string;
+            tokenPrefix: string;
+            status: string;
+            createdAt: string;
+          };
+        }>(),
+    });
+  },
+  useRotateIngestionToken() {
+    return useMutation({
+      mutationFn: async (id: string) =>
+        hdxServer(`ingestion-tokens/${id}/rotate`, {
+          method: 'POST',
+        }).json<{
+          token: string;
+          tokenRecord: {
+            id: string;
+            tokenPrefix: string;
+            status: string;
+            createdAt: string;
+          };
+        }>(),
+    });
+  },
+  useRevokeIngestionToken() {
+    return useMutation({
+      mutationFn: async (id: string) =>
+        hdxServer(`ingestion-tokens/${id}`, {
+          method: 'DELETE',
+        }).json(),
+    });
+  },
+  useTeams() {
+    return useQuery<{
+      activeTeamId: string | null;
+      data: Array<{
+        id: string;
+        name: string;
+        role: string;
+        status: string;
+      }>;
+    }>({
+      queryKey: ['teams'],
+      queryFn: () => hdxServer('teams').json(),
+      retry: false,
+    });
+  },
+  useSwitchTeam() {
+    return useMutation({
+      mutationFn: async (teamId: string) =>
+        hdxServer('teams/switch', {
+          method: 'POST',
+          json: { teamId },
+        }).json<{ activeTeamId: string }>(),
+    });
+  },
+  useCreateTeam() {
+    return useMutation({
+      mutationFn: async (name: string) =>
+        hdxServer('teams', {
+          method: 'POST',
+          json: { name },
+        }).json<{ team: any; activeTeamId: string }>(),
     });
   },
 };

@@ -47,5 +47,52 @@ export const CLICKHOUSE_HOST = env.CLICKHOUSE_HOST as string;
 export const CLICKHOUSE_USER = env.CLICKHOUSE_USER as string;
 export const CLICKHOUSE_PASSWORD = env.CLICKHOUSE_PASSWORD as string;
 
+// SaaS provisioning (optional; required if you want the API to create per-tenant DB/users)
+export const CLICKHOUSE_ADMIN_HOST = (env.CLICKHOUSE_ADMIN_HOST ||
+  env.CLICKHOUSE_HOST) as string;
+export const CLICKHOUSE_ADMIN_USER = (env.CLICKHOUSE_ADMIN_USER ||
+  env.CLICKHOUSE_USER) as string;
+export const CLICKHOUSE_ADMIN_PASSWORD = (env.CLICKHOUSE_ADMIN_PASSWORD ||
+  env.CLICKHOUSE_PASSWORD) as string;
+export const CLICKHOUSE_QUERY_HOST = (env.CLICKHOUSE_QUERY_HOST ||
+  env.CLICKHOUSE_ADMIN_HOST ||
+  env.CLICKHOUSE_HOST) as string;
+export const CLICKHOUSE_TENANT_PROVISIONING_ENABLED =
+  env.CLICKHOUSE_TENANT_PROVISIONING_ENABLED === 'true';
+
+// Ingestion sharding (gateway routes a team/token to a shard)
+export const INGESTION_SHARD_COUNT = Number.parseInt(
+  env.INGESTION_SHARD_COUNT || '1',
+);
+
+// OTLP gateway (data plane)
+export const OTLP_GATEWAY_GRPC_PORT = Number.parseInt(
+  env.OTLP_GATEWAY_GRPC_PORT || '4317',
+);
+export const OTLP_GATEWAY_HTTP_PORT = Number.parseInt(
+  env.OTLP_GATEWAY_HTTP_PORT || '4318',
+);
+// Comma-separated lists of shard endpoints by index:
+// e.g. INGESTION_SHARD_GRPC_ENDPOINTS="http://collector-shard-0:4317,http://collector-shard-1:4317"
+export const INGESTION_SHARD_GRPC_ENDPOINTS = (
+  env.INGESTION_SHARD_GRPC_ENDPOINTS || ''
+)
+  .split(',')
+  .filter(Boolean);
+export const INGESTION_SHARD_HTTP_ENDPOINTS = (
+  env.INGESTION_SHARD_HTTP_ENDPOINTS || ''
+)
+  .split(',')
+  .filter(Boolean);
+
 // AI Assistant
 export const ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY as string;
+
+// HTTP request logging
+// Set to 'false' to disable HTTP request logging entirely
+export const HTTP_LOG_ENABLED = env.HTTP_LOG_ENABLED !== 'false';
+// Comma-separated list of route prefixes to exclude from HTTP request logging
+// e.g. HTTP_LOG_IGNORE_ROUTES="/clickhouse-proxy,/health"
+export const HTTP_LOG_IGNORE_ROUTES = (env.HTTP_LOG_IGNORE_ROUTES || '')
+  .split(',')
+  .filter(Boolean);

@@ -3,11 +3,9 @@ import { useRouter } from 'next/router';
 
 import api from '@/api';
 import AuthLoadingBlocker from '@/AuthLoadingBlocker';
-import { IS_LOCAL_MODE } from '@/config';
+import { IS_LOCAL_MODE, IS_OSS } from '@/config';
 
 export default function LandingPage() {
-  const { data: installation, isLoading: installationIsLoading } =
-    api.useInstallation();
   const { data: team, isLoading: teamIsLoading } = api.useTeam();
   const router = useRouter();
 
@@ -20,10 +18,18 @@ export default function LandingPage() {
   }, [isLoggedIn, router]);
 
   useEffect(() => {
+    if (!IS_OSS) {
+      router.push('/login');
+    }
+  }, [router]);
+
+  const { data: installation } = api.useInstallation();
+  useEffect(() => {
+    if (!IS_OSS) return;
     if (installation?.isTeamExisting === true) {
       router.push('/login');
     } else if (installation?.isTeamExisting === false) {
-      router.push('/register');
+      router.push('/signup');
     }
   }, [installation, router]);
 
