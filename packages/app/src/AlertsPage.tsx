@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import cx from 'classnames';
 import type { Duration } from 'date-fns';
 import { add, formatRelative } from 'date-fns';
@@ -30,6 +31,7 @@ import {
   IconHelpCircle,
   IconInfoCircleFilled,
   IconTableRow,
+  IconBug,
 } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -273,6 +275,70 @@ function AckAlert({ alert }: { alert: AlertsPageItem }) {
   return null;
 }
 
+function CreateIncidentFromAlert({ alert }: { alert: AlertsPageItem }) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const createIncident = api.useCreateIncident();
+
+  const handleCreateIncident = React.useCallback(async () => {
+    if (!alert._id) return;
+
+    const alertName = alert.source === AlertSource.SAVED_SEARCH && alert.savedSearch
+      ? alert.savedSearch?.name
+      : alert.source === AlertSource.TILE && alert.dashboard
+      ? `${alert.dashboard?.name} - ${alert.dashboard?.tiles.find(t => t.id === alert.tileId)?.config.name || 'Tile'}`
+      : 'Alert';
+
+    try {
+      const result = await createIncident.mutateAsync({
+        title: `Incident: ${alertName}`,
+        description: `Created from alert: ${alertName}`,
+        severity: 'High',
+        status: 'Open',
+        alertIds: [alert._id],
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      notifications.show({
+        color: 'green',
+        message: 'Incident created successfully',
+        icon: <IconCheck size={16} />,
+      });
+
+      // Navigate to the new incident
+      if (result?.data?._id) {
+        router.push(`/incidents/${result.data._id}`);
+      }
+    } catch (err: any) {
+      notifications.show({
+        color: 'red',
+        message: err.message || 'Failed to create incident',
+      });
+    }
+  }, [alert, createIncident, queryClient, router]);
+
+  if (alert.state !== AlertState.ALERT) {
+    return null;
+  }
+
+  return (
+    <ErrorBoundary message="Failed to load create incident button">
+      <Tooltip label="Create incident from this alert">
+        <Button
+          size="compact-sm"
+          variant="light"
+          color="orange"
+          leftSection={<IconBug size={16} />}
+          onClick={handleCreateIncident}
+          disabled={createIncident.isPending}
+        >
+          Create Incident
+        </Button>
+      </Tooltip>
+    </ErrorBoundary>
+  );
+}
+
 function AlertHistoryCardList({
   history,
   alertUrl,
@@ -432,6 +498,7 @@ function AlertDetails({ alert }: { alert: AlertsPageItem }) {
 
       <Group>
         <AlertHistoryCardList history={alert.history} alertUrl={alertUrl} />
+        <CreateIncidentFromAlert alert={alert} />
         <AckAlert alert={alert} />
       </Group>
     </div>

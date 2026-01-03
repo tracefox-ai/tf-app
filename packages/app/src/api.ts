@@ -621,5 +621,111 @@ const api = {
         }).json<{ team: any; activeTeamId: string }>(),
     });
   },
+  useIncidents(filters?: { status?: string; severity?: string }) {
+    return useQuery({
+      queryKey: ['incidents', filters?.status, filters?.severity],
+      queryFn: () => {
+        const searchParams = new URLSearchParams();
+        if (filters?.status) searchParams.set('status', filters.status);
+        if (filters?.severity) searchParams.set('severity', filters.severity);
+        return hdxServer(`incidents?${searchParams.toString()}`).json<{
+          data: any[];
+        }>();
+      },
+    });
+  },
+  useIncident(id: string) {
+    return useQuery({
+      queryKey: ['incidents', id],
+      queryFn: () =>
+        hdxServer(`incidents/${id}`).json<{ data: any }>(),
+      enabled: !!id,
+    });
+  },
+  useCreateIncident() {
+    return useMutation({
+      mutationFn: async (incident: {
+        title: string;
+        description?: string;
+        severity: string;
+        status?: string;
+        ownerId?: string;
+        alertIds?: string[];
+      }) =>
+        hdxServer('incidents', {
+          method: 'POST',
+          json: incident,
+        }).json<{ data: any }>(),
+    });
+  },
+  useUpdateIncident() {
+    return useMutation({
+      mutationFn: async ({
+        id,
+        ...updates
+      }: {
+        id: string;
+        title?: string;
+        description?: string;
+        severity?: string;
+        status?: string;
+        ownerId?: string;
+        alertIds?: string[];
+      }) =>
+        hdxServer(`incidents/${id}`, {
+          method: 'PATCH',
+          json: updates,
+        }).json<{ data: any }>(),
+    });
+  },
+  useAddTimelineEvent() {
+    return useMutation({
+      mutationFn: async ({
+        id,
+        type,
+        message,
+        metadata,
+      }: {
+        id: string;
+        type: string;
+        message: string;
+        metadata?: Record<string, any>;
+      }) =>
+        hdxServer(`incidents/${id}/timeline`, {
+          method: 'POST',
+          json: { type, message, metadata },
+        }).json<{ data: any }>(),
+    });
+  },
+  useAnalyzeIncident() {
+    return useMutation({
+      mutationFn: async (id: string) =>
+        hdxServer(`incidents/${id}/analyze`, {
+          method: 'POST',
+        }).json<{ data: any }>(),
+    });
+  },
+  useDownloadIncidentReport() {
+    return useMutation({
+      mutationFn: async (id: string) => {
+        const response = await hdxServer(`incidents/${id}/report`, {
+          method: 'GET',
+        });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const contentDisposition = response.headers.get('content-disposition');
+        const filename =
+          contentDisposition?.split('filename=')[1]?.replace(/"/g, '') ||
+          `incident-report-${id}.md`;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+    });
+  },
 };
 export default api;

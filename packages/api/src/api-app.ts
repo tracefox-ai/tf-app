@@ -89,6 +89,7 @@ app.use('/', routers.rootRouter);
 app.use('/ai', isUserAuthenticated, routers.aiRouter);
 app.use('/alerts', isUserAuthenticated, routers.alertsRouter);
 app.use('/dashboards', isUserAuthenticated, routers.dashboardRouter);
+app.use('/incidents', isUserAuthenticated, routers.incidentsRouter);
 app.use('/me', isUserAuthenticated, routers.meRouter);
 app.use('/team', isUserAuthenticated, routers.teamRouter);
 app.use('/teams', isUserAuthenticated, routers.teamsRouter);

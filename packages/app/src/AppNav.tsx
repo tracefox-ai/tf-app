@@ -40,6 +40,7 @@ import {
   IconSitemap,
   IconTable,
   IconTarget,
+  IconAlertTriangle,
 } from '@tabler/icons-react';
 
 import {
@@ -754,6 +755,11 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
                   icon={<IconBell size={16} />}
                 />
               )}
+              <AppNavLink
+                label="Incidents"
+                href="/incidents"
+                icon={<IconAlertTriangle size={16} />}
+              />
               <AppNavLink
                 label="Client Sessions"
                 href="/sessions"
