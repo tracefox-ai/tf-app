@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
 import { serializeError } from 'serialize-error';
 
-import Connection from '@/models/connection';
+import Connection, { IConnection } from '@/models/connection';
 import DataIngestionMetrics from '@/models/dataIngestionMetrics';
+import { connectDB, mongooseConnection } from '@/models';
 import { CalculateDataIngestionTaskArgs, HdxTask } from '@/tasks/types';
 import logger from '@/utils/logger';
 import {
@@ -26,6 +27,13 @@ export default class CalculateDataIngestionTask
     logger.info('Starting data ingestion metrics calculation');
 
     try {
+      // Ensure MongoDB is connected
+      if (mongooseConnection.readyState !== 1) {
+        logger.info('Connecting to MongoDB...');
+        await connectDB();
+        logger.info('MongoDB connected');
+      }
+
       // Get all teams with managed ClickHouse connections
       const managedConnections = await Connection.find({
         isManaged: true,
@@ -49,16 +57,36 @@ export default class CalculateDataIngestionTask
         try {
           await this.processTeam(connection);
           processedCount++;
-        } catch (error) {
+        } catch (error: any) {
           errorCount++;
-          logger.error(
-            {
-              err: serializeError(error),
-              teamId: connection.team.toString(),
-              connectionId: connection._id.toString(),
-            },
-            'Failed to process team for data ingestion metrics',
-          );
+          const errorMessage =
+            error?.message || String(error) || 'Unknown error';
+          
+          // Check if it's a permissions error
+          const isPermissionError =
+            errorMessage.includes('Not enough privileges') ||
+            errorMessage.includes('privileges') ||
+            errorMessage.includes('grant');
+
+          if (isPermissionError) {
+            logger.warn(
+              {
+                err: serializeError(error),
+                teamId: connection.team.toString(),
+                connectionId: connection._id.toString(),
+              },
+              'Failed to process team - ClickHouse permissions issue. The user needs SELECT permissions on system.parts. Run: GRANT SELECT(table, min_time, modification_time, bytes, rows, active, database) ON system.parts TO <username>',
+            );
+          } else {
+            logger.error(
+              {
+                err: serializeError(error),
+                teamId: connection.team.toString(),
+                connectionId: connection._id.toString(),
+              },
+              'Failed to process team for data ingestion metrics',
+            );
+          }
           // Continue processing other teams
         }
       }
@@ -81,7 +109,7 @@ export default class CalculateDataIngestionTask
   }
 
   private async processTeam(
-    connection: mongoose.HydratedDocument<Connection>,
+    connection: mongoose.HydratedDocument<IConnection>,
   ): Promise<void> {
     const teamId = connection.team.toString();
     const database = getTenantDatabaseName(teamId);

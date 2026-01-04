@@ -81,6 +81,10 @@ export async function provisionTenantClickhouse(
   await clickhouseAdminQuery(
     `GRANT SELECT, INSERT, ALTER, CREATE, DROP, TRUNCATE ON ${quoteIdent(database)}.* TO ${quoteIdent(username)}`,
   );
+  // Grant access to system.parts for data ingestion metrics calculation
+  await clickhouseAdminQuery(
+    `GRANT SELECT(table, min_time, modification_time, bytes, rows, active, database) ON system.parts TO ${quoteIdent(username)}`,
+  );
 
   // 3) Tables (minimal set based on docker/clickhouse/local/init-db.sh)
   await clickhouseAdminQuery(`

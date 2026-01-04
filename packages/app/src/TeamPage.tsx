@@ -22,6 +22,8 @@ import {
   Table,
   Badge,
   Select,
+  Tabs,
+  Grid,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
@@ -646,126 +648,6 @@ function DataIngestionMetricsRealtimeSection() {
   );
 }
 
-function DataIngestionMetricsSection() {
-  const { data: metricsData, isLoading } = api.useDataIngestionMetrics();
-
-  if (IS_LOCAL_MODE) {
-    return null;
-  }
-
-  return (
-    <Box id="data-ingestion-metrics">
-      <Group justify="space-between" mb="md">
-        <Group gap="xs">
-          <IconChartBar size={20} />
-          <Text size="md">Daily Ingestion Metrics</Text>
-        </Group>
-        <Tooltip label="Daily breakdown of data ingested (bytes and rows) for invoicing purposes">
-          <IconHelpCircle size={16} style={{ cursor: 'help' }} />
-        </Tooltip>
-      </Group>
-      <Divider my="md" />
-      <Card variant="muted">
-        {isLoading ? (
-          <Center p="xl">
-            <Loader color="dimmed" />
-          </Center>
-        ) : !metricsData?.data || metricsData.data.length === 0 ? (
-          <Text c="dimmed" ta="center" p="xl">
-            No ingestion metrics available yet. Metrics are calculated hourly.
-          </Text>
-        ) : (
-          <Stack gap="md">
-            <Text size="sm" c="dimmed">
-              Daily totals for the last 30 days
-            </Text>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Date</Table.Th>
-                  <Table.Th>Total Bytes</Table.Th>
-                  <Table.Th>Total Rows</Table.Th>
-                  <Table.Th>Logs</Table.Th>
-                  <Table.Th>Traces</Table.Th>
-                  <Table.Th>Metrics</Table.Th>
-                  <Table.Th>Sessions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {metricsData.data
-                  .slice()
-                  .reverse()
-                  .map(metric => (
-                    <Table.Tr key={metric.date}>
-                      <Table.Td>
-                        <Text fw={500}>
-                          {new Date(metric.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" color="blue">
-                          {formatBytes(metric.totalBytes)}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" color="green">
-                          {formatNumber(metric.totalRows)}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {formatBytes(metric.breakdown.logs.bytes)}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {formatNumber(metric.breakdown.logs.rows)} rows
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {formatBytes(metric.breakdown.traces.bytes)}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {formatNumber(metric.breakdown.traces.rows)} rows
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {formatBytes(metric.breakdown.metrics.bytes)}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {formatNumber(metric.breakdown.metrics.rows)} rows
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {formatBytes(metric.breakdown.sessions.bytes)}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {formatNumber(metric.breakdown.sessions.rows)} rows
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-              </Table.Tbody>
-            </Table>
-          </Stack>
-        )}
-      </Card>
-    </Box>
-  );
-}
 
 function TeamQueryConfigSection() {
   const displayValueWithUnit =
@@ -993,7 +875,6 @@ export default function TeamPage() {
               <TeamNameSection />
               <TeamQueryConfigSection />
               <DataIngestionMetricsRealtimeSection />
-              <DataIngestionMetricsSection />
 
               {hasAllowedAuthMethods && (
                 <>

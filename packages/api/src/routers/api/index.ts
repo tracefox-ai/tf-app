@@ -1,5 +1,6 @@
 import aiRouter from './ai';
 import alertsRouter from './alerts';
+import billingRouter from './billing';
 import dashboardRouter from './dashboards';
 import incidentsRouter from './incidents';
 import meRouter from './me';
@@ -11,6 +12,7 @@ import webhooksRouter from './webhooks';
 export default {
   aiRouter,
   alertsRouter,
+  billingRouter,
   dashboardRouter,
   incidentsRouter,
   meRouter,

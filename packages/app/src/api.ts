@@ -782,5 +782,241 @@ const api = {
       refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
     });
   },
+  useBillingCurrent() {
+    return useQuery<{
+      teams: Array<{
+        teamId: string;
+        teamName: string;
+        date: string;
+        ingestion: {
+          logs: { bytes: number; rows: number };
+          traces: { bytes: number; rows: number };
+          metrics: { bytes: number; rows: number };
+          sessions: { bytes: number; rows: number };
+        };
+        costs: {
+          logs: number;
+          traces: number;
+          metrics: number;
+          sessions: number;
+          total: number;
+        };
+        currentHourlyCost: number;
+        estimatedDailyCost: number;
+      }>;
+      total: {
+        ingestion: {
+          logs: { bytes: number; rows: number };
+          traces: { bytes: number; rows: number };
+          metrics: { bytes: number; rows: number };
+          sessions: { bytes: number; rows: number };
+        };
+        costs: {
+          logs: number;
+          traces: number;
+          metrics: number;
+          sessions: number;
+          total: number;
+        };
+        currentHourlyCost: number;
+        estimatedDailyCost: number;
+      };
+    }>({
+      queryKey: ['billingCurrent'],
+      queryFn: async () => {
+        if (IS_LOCAL_MODE) {
+          return {
+            teams: [],
+            total: {
+              ingestion: {
+                logs: { bytes: 0, rows: 0 },
+                traces: { bytes: 0, rows: 0 },
+                metrics: { bytes: 0, rows: 0 },
+                sessions: { bytes: 0, rows: 0 },
+              },
+              costs: {
+                logs: 0,
+                traces: 0,
+                metrics: 0,
+                sessions: 0,
+                total: 0,
+              },
+              currentHourlyCost: 0,
+              estimatedDailyCost: 0,
+            },
+          };
+        }
+        return hdxServer('billing/current', { method: 'GET' }).json();
+      },
+      retry: false,
+      refetchInterval: 60000, // Refetch every minute for current usage
+    });
+  },
+  useBillingForecast() {
+    return useQuery<{
+      teams: Array<{
+        teamId: string;
+        teamName: string;
+        forecasts: Array<{
+          method: string;
+          projectedMonthlyCost: number;
+          projectedDailyCost: number;
+          basedOnDays: number;
+          description: string;
+        }>;
+        currentHourlyCost: number;
+        historicalDailyCosts: number[];
+      }>;
+      total: {
+        forecasts: Array<{
+          method: string;
+          projectedMonthlyCost: number;
+          projectedDailyCost: number;
+          basedOnDays: number;
+          description: string;
+        }>;
+        currentHourlyCost: number;
+        historicalDailyCosts: number[];
+      };
+    }>({
+      queryKey: ['billingForecast'],
+      queryFn: async () => {
+        if (IS_LOCAL_MODE) {
+          return {
+            teams: [],
+            total: {
+              forecasts: [],
+              currentHourlyCost: 0,
+              historicalDailyCosts: [],
+            },
+          };
+        }
+        return hdxServer('billing/forecast', { method: 'GET' }).json();
+      },
+      retry: false,
+    });
+  },
+  useBillingBreakdown(startDate?: string, endDate?: string) {
+    return useQuery<{
+      teams: Array<{
+        teamId: string;
+        teamName: string;
+        daily: Array<{
+          date?: string;
+          ingestion: {
+            logs: { bytes: number; rows: number };
+            traces: { bytes: number; rows: number };
+            metrics: { bytes: number; rows: number };
+            sessions: { bytes: number; rows: number };
+          };
+          costs: {
+            logs: number;
+            traces: number;
+            metrics: number;
+            sessions: number;
+            total: number;
+          };
+        }>;
+        total: {
+          ingestion: {
+            logs: { bytes: number; rows: number };
+            traces: { bytes: number; rows: number };
+            metrics: { bytes: number; rows: number };
+            sessions: { bytes: number; rows: number };
+          };
+          costs: {
+            logs: number;
+            traces: number;
+            metrics: number;
+            sessions: number;
+            total: number;
+          };
+        };
+      }>;
+      total: {
+        ingestion: {
+          logs: { bytes: number; rows: number };
+          traces: { bytes: number; rows: number };
+          metrics: { bytes: number; rows: number };
+          sessions: { bytes: number; rows: number };
+        };
+        costs: {
+          logs: number;
+          traces: number;
+          metrics: number;
+          sessions: number;
+          total: number;
+        };
+      };
+      period: {
+        start: string;
+        end: string;
+      };
+    }>({
+      queryKey: ['billingBreakdown', startDate, endDate],
+      queryFn: async () => {
+        if (IS_LOCAL_MODE) {
+          return {
+            teams: [],
+            total: {
+              ingestion: {
+                logs: { bytes: 0, rows: 0 },
+                traces: { bytes: 0, rows: 0 },
+                metrics: { bytes: 0, rows: 0 },
+                sessions: { bytes: 0, rows: 0 },
+              },
+              costs: {
+                logs: 0,
+                traces: 0,
+                metrics: 0,
+                sessions: 0,
+                total: 0,
+              },
+            },
+            period: {
+              start: startDate || new Date().toISOString().split('T')[0],
+              end: endDate || new Date().toISOString().split('T')[0],
+            },
+          };
+        }
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        return hdxServer(`billing?${params.toString()}`).json();
+      },
+      retry: false,
+    });
+  },
+  useBillingExport() {
+    return useMutation<
+      void,
+      Error,
+      { startDate?: string; endDate?: string; format?: 'csv' | 'json' }
+    >({
+      mutationFn: async ({ startDate, endDate, format = 'json' }) => {
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        params.append('format', format);
+        const response = await hdxServer(
+          `billing/export?${params.toString()}`,
+          { method: 'GET' },
+        );
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const contentDisposition = response.headers.get('content-disposition');
+        const filename =
+          contentDisposition?.split('filename=')[1]?.replace(/"/g, '') ||
+          `billing-export-${startDate || 'start'}-${endDate || 'end'}.${format}`;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+    });
+  },
 };
 export default api;

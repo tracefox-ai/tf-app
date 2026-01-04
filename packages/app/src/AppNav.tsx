@@ -32,6 +32,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconCommand,
+  IconCurrencyDollar,
   IconDeviceLaptop,
   IconLayoutGrid,
   IconLayoutSidebarLeftCollapse,
@@ -878,6 +879,11 @@ export default function AppNav({ fixed = false }: { fixed?: boolean }) {
 
               {!IS_LOCAL_MODE && (
                 <Box mt="sm">
+                  <AppNavLink
+                    label="Billing"
+                    href="/billing"
+                    icon={<IconCurrencyDollar size={16} />}
+                  />
                   <AppNavLink
                     label="Team Settings"
                     href="/team"

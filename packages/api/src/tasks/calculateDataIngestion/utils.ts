@@ -2,7 +2,7 @@ import { ResponseJSON } from '@hyperdx/common-utils/dist/clickhouse';
 import { ClickhouseClient } from '@hyperdx/common-utils/dist/clickhouse/node';
 import mongoose from 'mongoose';
 
-import Connection from '@/models/connection';
+import Connection, { IConnection } from '@/models/connection';
 
 export type TableType = 'logs' | 'traces' | 'metrics' | 'sessions';
 
@@ -49,7 +49,7 @@ export function getTableNamesByType(): TableTypeMapping[] {
  * Query ClickHouse system.parts table to get metrics for a specific database
  */
 export async function queryClickHouseMetrics(
-  connection: mongoose.HydratedDocument<Connection>,
+  connection: mongoose.HydratedDocument<IConnection>,
   database: string,
   lastCheckTime: Date | null,
 ): Promise<PartitionMetrics[]> {
@@ -96,8 +96,8 @@ export async function queryClickHouseMetrics(
   const query = `
     SELECT
         table,
-        toDate(min_time) as partition_date,
-        toHour(modification_time) as partition_hour,
+        toDate(min_time) as partitionDate,
+        toHour(modification_time) as partitionHour,
         sum(bytes) as bytes,
         sum(rows) as rows
     FROM system.parts
@@ -105,8 +105,8 @@ export async function queryClickHouseMetrics(
         AND database = {dbName: String}
         AND (${tableListString})
         ${timeFilter}
-    GROUP BY table, partition_date, partition_hour
-    ORDER BY partition_date, partition_hour
+    GROUP BY table, toDate(min_time), toHour(modification_time)
+    ORDER BY partitionDate, partitionHour
   `;
 
   try {
@@ -116,8 +116,24 @@ export async function queryClickHouseMetrics(
       query_params: queryParams,
     });
 
-    const json = await result.json<ResponseJSON<PartitionMetrics>>();
-    return json.data || [];
+    const json = await result.json<ResponseJSON<{
+      table: string;
+      partitionDate: string;
+      partitionHour: number;
+      bytes: string | number;
+      rows: string | number;
+    }>>();
+    
+    // Map the results to match our interface and ensure proper types
+    const mappedData: PartitionMetrics[] = (json.data || []).map(row => ({
+      table: row.table,
+      partitionDate: row.partitionDate || '',
+      partitionHour: Number(row.partitionHour) || 0,
+      bytes: Number(row.bytes) || 0,
+      rows: Number(row.rows) || 0,
+    }));
+
+    return mappedData;
   } catch (error) {
     throw new Error(
       `Failed to query ClickHouse metrics for database ${database}: ${error}`,
