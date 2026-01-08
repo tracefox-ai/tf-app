@@ -205,7 +205,7 @@ function SourceEditMenu({
           </Text>
         </ActionIcon>
       </Menu.Target>
-      <Menu.Dropdown>
+      {/* <Menu.Dropdown>
         <Menu.Label>Sources</Menu.Label>
         <Menu.Item
           data-testid="create-new-source-menu-item"
@@ -232,7 +232,7 @@ function SourceEditMenu({
             Edit Sources
           </Menu.Item>
         )}
-      </Menu.Dropdown>
+      </Menu.Dropdown> */}
     </Menu>
   );
 }

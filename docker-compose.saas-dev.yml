@@ -1,14 +1,14 @@
 name: hdx-saas-dev
 
 services:
-  mongo:
+  db:
     image: mongo:5.0.14-focal
     ports:
       - 27017:27017
     volumes:
       - .volumes/db_saas_dev:/data/db
 
-  clickhouse:
+  ch-server:
     image: clickhouse/clickhouse-server:25.7-alpine
     ports:
       - 8123:8123 # http api
@@ -48,12 +48,12 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: hdx.shard_id=shard-0
       HDX_SHARD_ID: shard-0
       HYPERDX_LOG_LEVEL: info
-      CLICKHOUSE_ENDPOINT: tcp://clickhouse:9000?dial_timeout=10s
+      CLICKHOUSE_ENDPOINT: tcp://ch-server:9000?dial_timeout=10s
     ports:
       - 14317:4317
       - 14318:4318
     depends_on:
-      - clickhouse
+      - ch-server
 
   collector-shard-1:
     build:
@@ -64,9 +64,9 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: hdx.shard_id=shard-1
       HDX_SHARD_ID: shard-1
       HYPERDX_LOG_LEVEL: info
-      CLICKHOUSE_ENDPOINT: tcp://clickhouse:9000?dial_timeout=10s
+      CLICKHOUSE_ENDPOINT: tcp://ch-server:9000?dial_timeout=10s
     ports:
       - 24317:4317
       - 24318:4318
     depends_on:
-      - clickhouse
+      - ch-server

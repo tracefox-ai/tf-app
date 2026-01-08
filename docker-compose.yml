@@ -1,19 +1,20 @@
 name: hdx-oss
 services:
   # ONLY USED FOR DEMO SSL SETUP
-  # nginx:
-  #   image: nginx:1.27.3
-  #   volumes:
-  #     - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-  #     - ./docker/nginx/ssl:/etc/nginx/ssl
-  #     - .volumes/nginx_logs:/var/log/nginx
-  #   ports:
-  #     - 80:80
-  #     - 443:443
-  #   networks:
-  #     - internal
-  #   depends_on:
-  #     - app
+  nginx:
+    image: nginx:1.27.3
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      # - ./docker/nginx/ssl:/etc/nginx/ssl
+      - .volumes/nginx_logs:/var/log/nginx
+    ports:
+      - 80:80
+      - 4317:4317  # OTLP gRPC gateway (forwarded from Cloudflare port 443)
+      # - 443:443
+    networks:
+      - internal
+    depends_on:
+      - app
   db:
     image: mongo:5.0.32-focal
     volumes:
@@ -21,49 +22,114 @@ services:
     # WARNING: Exposing the database port will make it accessible from outside the container,
     # potentially allowing unauthorized access. If you uncomment the ports below,
     # ensure to secure your database (e.g., with strong authentication, proper network rules, and firewalls).
-    # ports:
-    #   - 27017:27017
-    networks:
-      - internal
-  otel-collector:
-    image: ${CH_IMAGE_REPO}/${NEXT_OTEL_COLLECTOR_IMAGE_NAME_DOCKERHUB}:${IMAGE_VERSION}
-    environment:
-      CLICKHOUSE_ENDPOINT: 'tcp://ch-server:9000?dial_timeout=10s'
-      HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE: ${HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE}
-      HYPERDX_LOG_LEVEL: ${HYPERDX_LOG_LEVEL}
-      OPAMP_SERVER_URL: 'http://app:${HYPERDX_OPAMP_PORT}'
     ports:
-      - '13133:13133' # health_check extension
-      - '24225:24225' # fluentd receiver
-      - '4317:4317' # OTLP gRPC receiver
-      - '4318:4318' # OTLP http receiver
-      - '8888:8888' # metrics extension
-    restart: always
+      - 27017:27017
     networks:
       - internal
+  ch-server:
+    image: clickhouse/clickhouse-server:25.7-alpine
+    ports:
+      - 8123:8123 # http api
+      - 9000:9000 # native
+    environment:
+      # default settings
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE: ${HYPERDX_OTEL_EXPORTER_CLICKHOUSE_DATABASE}
+    volumes:
+      - ./docker/clickhouse/local/config.xml:/etc/clickhouse-server/config.xml
+      - ./docker/clickhouse/local/users.xml:/etc/clickhouse-server/users.xml
+      - ./docker/clickhouse/local/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - .volumes/ch_data:/var/lib/clickhouse
+      - .volumes/ch_logs:/var/log/clickhouse-server
+    restart: on-failure
+    healthcheck:
+      test:
+        wget -O /dev/null --no-verbose --tries=1 http://127.0.0.1:8123/ping ||
+        exit 1
+      interval: 1s
+      timeout: 1s
+      retries: 60
+    networks:
+      - internal
+  collector-shard-0:
+    build:
+      context: ./docker/otel-collector
+      target: dev
+    environment:
+      OPAMP_SERVER_URL: http://app:${HYPERDX_OPAMP_PORT}
+      OTEL_RESOURCE_ATTRIBUTES: hdx.shard_id=shard-0
+      HDX_SHARD_ID: shard-0
+      HYPERDX_LOG_LEVEL: ${HYPERDX_LOG_LEVEL}
+      CLICKHOUSE_ENDPOINT: tcp://ch-server:9000?dial_timeout=10s
+    ports:
+      - 14317:4317
+      - 14318:4318
     depends_on:
       - ch-server
+    networks:
+      - internal
+  collector-shard-1:
+    build:
+      context: ./docker/otel-collector
+      target: dev
+    environment:
+      OPAMP_SERVER_URL: http://app:${HYPERDX_OPAMP_PORT}
+      OTEL_RESOURCE_ATTRIBUTES: hdx.shard_id=shard-1
+      HDX_SHARD_ID: shard-1
+      HYPERDX_LOG_LEVEL: ${HYPERDX_LOG_LEVEL}
+      CLICKHOUSE_ENDPOINT: tcp://ch-server:9000?dial_timeout=10s
+    ports:
+      - 24317:4317
+      - 24318:4318
+    depends_on:
+      - ch-server
+    networks:
+      - internal
+  otlp-gateway:
+    image: ${HDX_IMAGE_REPO}/${IMAGE_NAME_DOCKERHUB}:${IMAGE_VERSION}
+    command: node -r ./node_modules/@hyperdx/node-opentelemetry/build/src/tracing ./packages/api/build/otelGateway/index.js
+    ports:
+      - ${OTLP_GATEWAY_GRPC_PORT:-4317}:${OTLP_GATEWAY_GRPC_PORT:-4317}
+      - ${OTLP_GATEWAY_HTTP_PORT:-4318}:${OTLP_GATEWAY_HTTP_PORT:-4318}
+    environment:
+      HYPERDX_API_KEY: ${HYPERDX_API_KEY}
+      HYPERDX_LOG_LEVEL: ${HYPERDX_LOG_LEVEL}
+      MONGO_URI: "mongodb://db:27017/hyperdx"
+      OTLP_GATEWAY_GRPC_PORT: ${OTLP_GATEWAY_GRPC_PORT:-4317}
+      OTLP_GATEWAY_HTTP_PORT: ${OTLP_GATEWAY_HTTP_PORT:-4318}
+      INGESTION_SHARD_GRPC_ENDPOINTS: "http://collector-shard-0:4317,http://collector-shard-1:4317"
+      INGESTION_SHARD_HTTP_ENDPOINTS: "http://collector-shard-0:4318,http://collector-shard-1:4318"
+    depends_on:
+      - ch-server
+      - db
+      - collector-shard-0
+      - collector-shard-1
+    networks:
+      - internal
   app:
     image: ${HDX_IMAGE_REPO}/${IMAGE_NAME_DOCKERHUB}:${IMAGE_VERSION}
     ports:
       - ${HYPERDX_API_PORT}:${HYPERDX_API_PORT}
       - ${HYPERDX_APP_PORT}:${HYPERDX_APP_PORT}
     environment:
-      FRONTEND_URL: ${HYPERDX_APP_URL}:${HYPERDX_APP_PORT}
+      # FRONTEND_URL: ${HYPERDX_APP_URL}:${HYPERDX_APP_PORT}
+      FRONTEND_URL: ${FRONTEND_URL}
       HYPERDX_API_KEY: ${HYPERDX_API_KEY}
       HYPERDX_API_PORT: ${HYPERDX_API_PORT}
       HYPERDX_APP_PORT: ${HYPERDX_APP_PORT}
       HYPERDX_APP_URL: ${HYPERDX_APP_URL}
       HYPERDX_LOG_LEVEL: ${HYPERDX_LOG_LEVEL}
-      MINER_API_URL: 'http://miner:5123'
-      MONGO_URI: 'mongodb://db:27017/hyperdx'
+      MINER_API_URL: "http://miner:5123"
+      MONGO_URI: "mongodb://db:27017/hyperdx"
       SERVER_URL: http://127.0.0.1:${HYPERDX_API_PORT}
       OPAMP_PORT: ${HYPERDX_OPAMP_PORT}
-      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
-      OTEL_SERVICE_NAME: 'hdx-oss-app'
+      OTEL_SERVICE_NAME: "hdx-oss-app"
       USAGE_STATS_ENABLED: ${USAGE_STATS_ENABLED:-true}
-      DEFAULT_CONNECTIONS:
-        '[{"name":"Local
+      CLICKHOUSE_TENANT_PROVISIONING_ENABLED: "true"
+      CLICKHOUSE_ADMIN_HOST: "http://ch-server:8123"
+      CLICKHOUSE_ADMIN_USER: "default"
+      CLICKHOUSE_ADMIN_PASSWORD: ""
+      DEFAULT_CONNECTIONS: '[{"name":"Local
         ClickHouse","host":"http://ch-server:8123","username":"default","password":""}]'
       DEFAULT_SOURCES:
         '[{"from":{"databaseName":"default","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"TimestampTime","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local
@@ -71,28 +137,11 @@ services:
         ClickHouse","logSourceId":"Logs","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum","_id":"682586a8b1f81924e628e808","id":"682586a8b1f81924e628e808"},"connection":"Local
         ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","sessionSourceId":"Sessions"},{"from":{"databaseName":"default","tableName":"hyperdx_sessions"},"kind":"session","timestampValueExpression":"TimestampTime","name":"Sessions","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local
         ClickHouse","logSourceId":"Logs","traceSourceId":"Traces","metricSourceId":"Metrics"}]'
-    networks:
-      - internal
     depends_on:
       - ch-server
       - db
-  ch-server:
-    image: clickhouse/clickhouse-server:25.6-alpine
-    # WARNING: Exposing the database port will make it accessible from outside the container,
-    # potentially allowing unauthorized access. If you uncomment the ports below,
-    # ensure to secure your database (e.g., with strong authentication, proper network rules, and firewalls).
-    # ports:
-    #   - 8123:8123 # http api
-    #   - 9000:9000 # native
-    environment:
-      # default settings
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-    volumes:
-      - ./docker/clickhouse/local/config.xml:/etc/clickhouse-server/config.xml
-      - ./docker/clickhouse/local/users.xml:/etc/clickhouse-server/users.xml
-      - .volumes/ch_data:/var/lib/clickhouse
-      - .volumes/ch_logs:/var/log/clickhouse-server
-    restart: on-failure
+      - collector-shard-0
+      - collector-shard-1
     networks:
       - internal
 networks:

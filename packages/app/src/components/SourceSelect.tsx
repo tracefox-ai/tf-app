@@ -75,10 +75,10 @@ function SourceSelectControlledComponent({
       ).sort((a, b) => a.label.localeCompare(b.label)),
       ...(onCreate && !hasLocalDefaultSources
         ? [
-            {
-              value: '_create_new_value',
-              label: 'Create New Source',
-            },
+            // {
+            //   value: '_create_new_value',
+            //   label: 'Create New Source',
+            // },
           ]
         : []),
     ],
