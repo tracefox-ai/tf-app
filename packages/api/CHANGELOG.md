@@ -1,5 +1,19 @@
 # @hyperdx/api
 
+## 2.12.0
+
+### Patch Changes
+
+- ebaebc1: feat: Use materialized views in alert execution
+- ac1a2f7: chore: Format OpenAPI docs
+- 725dbc2: feat: Align line/bar chart date ranges to chart granularity
+- ae12ca1: feat: Add MV granularities and infer config from SummingMergeTree
+- fd81c4c: chore: bump MongoDB version to 5.0.32
+- Updated dependencies [ab7645d]
+- Updated dependencies [ebaebc1]
+- Updated dependencies [725dbc2]
+  - @hyperdx/common-utils@0.10.2
+
 ## 2.11.0
 
 ### Patch Changes

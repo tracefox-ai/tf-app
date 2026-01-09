@@ -1,5 +1,13 @@
 # @hyperdx/common-utils
 
+## 0.10.2
+
+### Patch Changes
+
+- ab7645d: feat: Add a minimum date to MV configuration
+- ebaebc1: feat: Use materialized views in alert execution
+- 725dbc2: feat: Align line/bar chart date ranges to chart granularity
+
 ## 0.10.1
 
 ### Patch Changes
